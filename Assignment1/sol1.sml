@@ -1,4 +1,4 @@
-(* 2019054957 ÀÌ¿ë¿ì *)
+(* 2019054957 ì´ìš©ìš° *)
 
 fun merge(list1 : int list, list2 : int list) =
     if null list1
