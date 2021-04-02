@@ -104,8 +104,23 @@ fun filterMultiples(lazyListVal, n) =
                                      then filterMultiples(f(), n)
                                      else cons(first, res)
                                  end
-                                
-    
+
+(* 3.2 Sieve of Eratosthenes*)
+fun primes() =
+    let
+        fun sieve(lazyListVal) = 
+            case lazyListVal of
+                  nullList => nullList
+                | cons(first, f) => let
+                                        fun res() = sieve(filterMultiples(lazyListVal, first))
+                                    in
+                                        cons(first, res)
+                                    end
+                                    
+    in
+        sieve(infSeq(2))
+    end
+
 (* Test Codes *)
 val evalTest1 = eval(TRUE) = true
 val evalTest2 = eval(FALSE) = false
@@ -170,3 +185,6 @@ val filterMultiplesTest2 = firstN(filterMultiples(seq(1, 20), 2), 5) = [1, 3, 5,
 val filterMultiplesTest3 = firstN(filterMultiples(seq(~5, 5), 3), 5) = [~5, ~4, ~2, ~1, 1]
 val filterMultiplesTest4 = firstN(filterMultiples(seq(~5, 5), 1), 5) = []
 val filterMultiplesTest5 = firstN(filterMultiples(seq(5, 1), 5), 5) = []
+
+val primesTest1 = firstN(primes(), 10) = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
+val primesTest2 = Nth(primes(), 20) = SOME 71
