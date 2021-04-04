@@ -1,4 +1,4 @@
-(* 2019054957 ì´ìš©ìš°*)
+(* 2019054957 ÀÌ¿ë¿ì *)
 
 (* 1. Simple Eval *)
 datatype expr = NUM of int
@@ -18,8 +18,8 @@ fun eval(f: formula) =
         fun eval_expr(e: expr) =
             case e of
                   NUM(i) => i
-                | PLUS(i1, i2) => eval_expr(i1) + eval_expr(i2)
-                | MINUS(i1, i2) => eval_expr(i1) - eval_expr(i2)
+                | PLUS(e1, e2) => eval_expr(e1) + eval_expr(e2)
+                | MINUS(e1, e2) => eval_expr(e1) - eval_expr(e2)
     in
         case f of
               TRUE => true
@@ -28,7 +28,7 @@ fun eval(f: formula) =
             | ANDALSO(f1, f2) => eval(f1) andalso eval(f2)
             | ORELSE(f1, f2) => eval(f1) orelse eval(f2)
             | IMPLY(f1, f2) => not(eval(f1)) orelse eval(f2)
-            | LESS(f1, f2) => eval_expr(f1) < eval_expr(f2)
+            | LESS(e1, e2) => eval_expr(e1) < eval_expr(e2)
     end
 
 (* 2. Check MetroMap *)
@@ -101,7 +101,7 @@ fun filterMultiples(lazyListVal, n) =
                                      fun res() = filterMultiples(f(), n)
                                  in
                                      if first mod n = 0
-                                     then filterMultiples(f(), n)
+                                     then res()
                                      else cons(first, res)
                                  end
 
@@ -187,4 +187,4 @@ val filterMultiplesTest4 = firstN(filterMultiples(seq(~5, 5), 1), 5) = []
 val filterMultiplesTest5 = firstN(filterMultiples(seq(5, 1), 5), 5) = []
 
 val primesTest1 = firstN(primes(), 10) = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
-val primesTest2 = Nth(primes(), 20) = SOME 71 *)
+val primesTest2 = Nth(primes(), 20) = SOME 71*)
