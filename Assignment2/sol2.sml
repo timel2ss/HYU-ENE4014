@@ -1,4 +1,4 @@
-(* 2019054957 ÀÌ¿ë¿ì *)
+(* 2019054957 ì´ìš©ìš° *)
 
 (* 1. Simple Eval *)
 datatype expr = NUM of int
