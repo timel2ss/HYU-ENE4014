@@ -93,7 +93,7 @@ fun whosWinner(t) =
                 (PLAYER(n1, s1), PLAYER(n2, s2)) => let
                                                         fun rule(RSP1, RSP2) =
                                                             case (RSP1, RSP2) of
-                                                                (ROCK, SCISSORS) => SOME p1
+                                                              (ROCK, SCISSORS) => SOME p1
                                                             | (ROCK, PAPER) => SOME p2
                                                             | (SCISSORS, PAPER) => SOME p1
                                                             | (SCISSORS, ROCK) => SOME p2
