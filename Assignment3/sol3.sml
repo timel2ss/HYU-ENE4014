@@ -15,19 +15,20 @@ datatype valu = Const of int
 (* 1. check_pat *)
 fun check_pat p =
     let
-        fun check_string_list(p: pattern, sl: string list) =
+        fun make_str_list(p: pattern, sl: string list) =
             case p of
                   Variable(s) => s::sl
-                | TupleP(ps) => foldl check_string_list sl ps
-                | ConstructorP(_, p) => check_string_list(p, sl)
+                | TupleP(ps) => foldl make_str_list sl ps
+                | ConstructorP(_, p) => make_str_list(p, sl)
                 | _ => sl
 
-        fun helper(sl: string list) =
+        fun distinct(sl: string list) =
             case sl of
                   [] => true
-                | s::rest => not(List.exists (fn x => x = s) rest) andalso helper(rest)
+                | s::[] => true
+                | s::rest => not(List.exists (fn x => x = s) rest) andalso distinct(rest)
     in
-        helper(check_string_list(p, []))
+        distinct(make_str_list(p, []))
     end
 
 (* 2. match *)
@@ -42,10 +43,9 @@ fun match(v: valu, p: pattern) =
         | (Tuple(vl), TupleP(pl)) => if length vl = length pl
                                      then
                                          let
-                                             val pair = ListPair.zip(vl, pl)
-                                             val matchPair = List.filter (fn x => isSome(match(x))) pair
+                                             val matchPair = List.filter (fn x => isSome(match(x))) (ListPair.zip(vl, pl))
                                          in
-                                             if length matchPair = length pl
+                                             if length matchPair = length vl
                                              then SOME(foldl (fn (x, y) => valOf(match(x)) @ y) [] matchPair)
                                              else NONE
                                          end
@@ -116,15 +116,38 @@ fun whosWinner(t) =
             | MATCH(t1, t2) => game(whosWinner(t1), whosWinner(t2))
     end
 
-(* Test Codes *)
-val p1 = ConstructorP("what", TupleP([TupleP([UnitP, Wildcard, ConstP(1), TupleP([Variable("b"), Variable("c"), ConstP(3)]), Variable("a")])]))
-val p2 = ConstructorP("what", TupleP([TupleP([UnitP, Wildcard, ConstP(1), TupleP([Variable("a"), Variable("a"), ConstP(3)]), Variable("a")])]))
-val v1 = Constructor("what", Tuple([Tuple([Unit, Const(1), Const(1), Tuple([Const(4), Unit, Const(3)]), Tuple([Const(5),Const(6)])])]))
-val checkPatTest1 = check_pat(p1)
-val checkPatTest2 = check_pat(p2)
+(* (* Test Codes *)
+(* Test Data *)
+val p1 = Variable("a")
+val p2 = ConstructorP("wildcard", Wildcard)
+val p3 = ConstructorP("constructor", TupleP([ConstP(17), Variable("a"), TupleP([Variable("b"), Wildcard, Variable("c"), TupleP([UnitP, Variable("d"), Variable("e")])])]))
+val p4 = ConstructorP("constructor", TupleP([ConstP(17), Variable("a"), TupleP([Variable("b"), Wildcard, Variable("c"), TupleP([UnitP, Variable("d"), Variable("a")])])]))
+val p5 = ConstructorP("constructor", TupleP([ConstP(17), Variable("a"), TupleP([Variable("b"), Wildcard, Variable("c"), TupleP([UnitP, Variable("d"), Variable("e")])]), Variable("f")]))
+val p6 = ConstructorP("constructor", TupleP([ConstP(17), Variable("a"), TupleP([Variable("b"), Wildcard, Variable("c"), TupleP([UnitP, Variable("d"), Variable("e")])]), Variable("f"), Variable("d")]))
+val v1 = Const(42)
+val v2 = Constructor("wild", Unit)
+val v3 = Constructor("wildcard", Const(42))
+val v4 = Constructor("constructor", Tuple([Const(17), Unit, Tuple([Const(18), Const(19), Const(20), Tuple([Unit, Const(21), Unit])])]))
+val v5 = Constructor("constructor", Tuple([Const(17), Unit, Tuple([Const(18), Const(19), Const(20), Tuple([Unit, Const(21), Unit])]), Const(22)]))
+val v6 = Constructor("constructor", Tuple([Const(15), Unit, Tuple([Const(18), Const(19), Const(20), Tuple([Unit, Const(21), Unit])]), Const(22)]))
+val v7 = Constructor("constructor", Tuple([Const(17), Unit, Tuple([Const(19), Const(20), Tuple([Unit, Const(21), Unit])]), Const(22)]))
+val winner1 = PLAYER("rp", ref rp)
+val winner2 = PLAYER("Emily", ref srp)
 
-val matchTest1 = match(v1, p1)          
-val matchTest2 = match(v1, p1)
+val checkPatTest1 = check_pat(p1) = true
+val checkPatTest2 = check_pat(p2) = true
+val checkPatTest3 = check_pat(p3) = true
+val checkPatTest4 = check_pat(p4) = false
+val checkPatTest5 = check_pat(p5) = true
+val checkPatTest6 = check_pat(p6) = false
 
-val whosWinnerTest1 = whosWinner(MATCH(PLAYER("s", ref s), MATCH(PLAYER("rp", ref rp), PLAYER("r", ref r))))
+val matchTest1 = match(v1, p1) = SOME [("a", Const(42))] 
+val matchTest2 = match(v2, p2) = NONE
+val matchTest3 = match(v3, p2) = SOME []
+val matchTest4 = match(v4, p3) = SOME [("e", Unit), ("d", Const(21)), ("c", Const(20)), ("b", Const(18)), ("a", Unit)]
+val matchTest5 = match(v5, p5) = SOME [("f", Const(22)), ("e", Unit), ("d", Const(21)), ("c", Const(20)), ("b", Const(18)), ("a", Unit)]
+val matchTest6 = match(v6, p5) = NONE
+val matchTest7 = match(v7, p5) = NONE
 
+val whosWinnerTest1 = whosWinner(MATCH(PLAYER("s", ref s), MATCH(winner1, PLAYER("r", ref r)))) = winner1
+val whosWinnerTest2 = whosWinner(MATCH(MATCH(PLAYER("John", ref sr), PLAYER("Steve", ref s)), MATCH(PLAYER("Alice", ref p), MATCH(PLAYER("David", ref r), MATCH(PLAYER("Bill", ref s), winner2))))) = winner2 *)
