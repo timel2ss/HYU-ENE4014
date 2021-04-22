@@ -13,7 +13,7 @@ datatype valu = Const of int
               | Constructor of string * valu
 
 (* 1. check_pat *)
-fun check_pat p =
+fun check_pat(p: pattern) =
     let
         fun make_str_list(p: pattern, sl: string list) =
             case p of
