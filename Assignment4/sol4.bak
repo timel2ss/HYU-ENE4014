@@ -1,0 +1,10 @@
+#lang racket
+(provide (all-defined-out))
+; 2019054957
+
+; 1. check_bst
+
+(define (check_bst xs)
+  (if (null? xs)
+      #t
+      
