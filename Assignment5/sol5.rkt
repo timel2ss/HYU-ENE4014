@@ -39,6 +39,12 @@
       null
       (cons (apair-e1 mlist) (mupllist->racketlist (apair-e2 mlist)))))
 
+;; Test Codes
+(equal? (racketlist->mupllist '()) (aunit))
+(equal? (racketlist->mupllist '(1 2 3)) (apair 1 (apair 2 (apair 3 (aunit)))))
+(equal? (mupllist->racketlist (aunit)) '())
+(equal? (mupllist->racketlist (apair -5 (apair -4 (apair -3 (aunit))))) '(-5 -4 -3))
+
 ;; Problem 2
 
 ;; lookup a variable in an environment
@@ -71,30 +77,28 @@
         [(ifgreater? e)
          (let ([v1 (eval-under-env (ifgreater-e1 e) env)]
                [v2 (eval-under-env (ifgreater-e2 e) env)])
-           (if (and (int? v1)
-                    (int? v2))
+           (if (and (int? v1)(int? v2))
                (if (> (int-num v1) (int-num v2))
                    (eval-under-env (ifgreater-e3 e) env)
                    (eval-under-env (ifgreater-e4 e) env))
                (error "MUPL ifgreater applied to non-number")))]
         [(mlet? e)
          (letrec ([v (eval-under-env (mlet-e e) env)]
-                  [newenv (cons (cons (mlet-var e) v) env)])
-           (eval-under-env (mlet-body e) newenv))]
+                  [letenv (cons (cons (mlet-var e) v) env)])
+           (eval-under-env (mlet-body e) letenv))]
         [(call? e)
          (let ([v1 (eval-under-env (call-funexp e) env)]
                [v2 (eval-under-env (call-actual e) env)])
            (if (closure? v1)
                (let* ([cfun (closure-fun v1)]
                       [cenv (closure-env v1)]
-                      [fname (fun-nameopt cfun)]
-                      [fmap (cons fname v1)]
-                      [farg (cons (fun-formal cfun) v2)]
+                      [newenv (cons (cons (fun-formal cfun) v2) cenv)]
+                      [fmap (cons (fun-nameopt cfun) v1)]
                       [fbody (fun-body cfun)])
-                 (if (eq? fname #f)
-                     (eval-under-env fbody (cons farg cenv))
-                     (eval-under-env fbody (cons farg (cons fmap cenv)))))
-               (error "MUPL call applied to non-closure function")))]
+                 (if (fun-nameopt cfun)
+                     (eval-under-env fbody (cons fmap newenv))
+                     (eval-under-env fbody newenv)))
+               (error "MUPL call applied to non-closure")))]
         [(apair? e)
          (let ([v1 (eval-under-env (apair-e1 e) env)]
                [v2 (eval-under-env (apair-e2 e) env)])
@@ -103,12 +107,12 @@
          (let ([v (eval-under-env (fst-e e) env)])
            (if (apair? v)
                (apair-e1 v)
-               (error "MUPL fst evaluated non-apair value")))]
+               (error "MUPL fst applied to non-apair")))]
         [(snd? e)
          (let ([v (eval-under-env (snd-e e) env)])
            (if (apair? v)
                (apair-e2 v)
-               (error "MUPL snd evaluated non-apair value")))]
+               (error "MUPL snd applied to non-apair")))]
         [(isaunit? e)
          (let ([v (eval-under-env (isaunit-e e) env)])
            (if (aunit? v)
@@ -119,6 +123,21 @@
 ;; Do NOT change
 (define (eval-exp e)
   (eval-under-env e null))
+
+;; Test Codes
+(equal? (eval-exp (ifgreater (int 3) (add (int 1) (int 1)) (aunit) (int 42))) (aunit))
+(equal? (eval-exp (ifgreater (add (int 1) (int 1)) (int 3) (aunit) (int 42))) (int 42))
+(equal? (eval-exp (call (fun "fun" "x" (add (int 1) (var "x"))) (int 3))) (int 4))
+(equal? (eval-exp (mlet "x" (int 42) (call (fun "fun" "arg" (add (var "x") (var "arg"))) (int 1)))) (int 43))
+(equal? (eval-exp (apair (add (int 1) (int 2)) (aunit))) (apair (int 3) (aunit)))
+(equal? (eval-exp (fst (apair (int 42) (int 43)))) (int 42))
+(equal? (eval-exp (snd (apair (int 42) (int 43)))) (int 43))
+(equal? (eval-exp (isaunit (aunit))) (int 1))
+(equal? (eval-exp (isaunit (apair (int 2) (aunit)))) (int 0))
+; (eval-exp (fst (int 7))) -> error case
+; (eval-exp (snd (int 7))) -> error case
+; (eval-exp (ifgreater (aunit) (int 42) (int 1) (int 2))) -> error case
+; (eval-exp (call (apair (int 1) (aunit)) (int 1))) -> error case
 
 ;; Problem 3
 
@@ -134,6 +153,13 @@
          (ifgreater (var "_x") (var "_y") e4
                     (ifgreater (var "_y") (var "_x") e4 e3))))
 
+;; Test Codes
+(equal? (eval-exp (ifaunit (aunit) (int 42) (int 34))) (int 42))
+(equal? (eval-exp (ifaunit (int 1) (int 42) (int 34))) (int 34))
+(equal? (eval-exp (mlet* (list (cons "a" (int 1)) (cons "b" (int 2))) (add (var "a") (var "b")))) (int 3))
+(equal? (eval-exp (ifeq (int 1) (int 1) (int 3) (int 4))) (int 3))
+(equal? (eval-exp (ifeq (int 1) (int 2) 3 (int 4))) (int 4))
+
 ;; Problem 4
 
 (define mupl-map
@@ -148,3 +174,7 @@
   (mlet "map" mupl-map
         (fun "#f" "I"
              (call (var "map") (fun #f "x" (add (var "x") (var "I")))))))
+
+;; Test Codes
+(equal? (eval-exp (call (call mupl-map (fun "fun" "x" (add (var "x") (int 1)))) (apair (int 1) (apair (int 2) (apair (int 3) (aunit)))))) (apair (int 2) (apair (int 3) (apair (int 4) (aunit)))))
+(equal? (eval-exp (call (call mupl-mapAddN (int 3)) (apair (int 1) (apair (int 2) (apair (int 3) (aunit)))))) (apair (int 4) (apair (int 5) (apair (int 6) (aunit)))))
