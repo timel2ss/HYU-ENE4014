@@ -8,7 +8,8 @@
 (struct ifgreater (e1 e2 e3 e4)    #:transparent) ;; if e1 > e2 then e3 else e4
 (struct fun  (nameopt formal body) #:transparent) ;; a recursive(?) 1-argument function
 (struct call (funexp actual)       #:transparent) ;; function call
-(struct mlet (var e body) #:transparent) ;; a local binding (let var = e in body) 
+(struct mlet (var e body) #:transparent) ;; a local binding (let var = e in body)
+(struct glet (var e body) #:transparent) ;; a global binding that overrides any local binding (let var = e in body)
 (struct apair (e1 e2)     #:transparent) ;; make a new pair
 (struct fst  (e)    #:transparent) ;; get first part of a pair
 (struct snd  (e)    #:transparent) ;; get second part of a pair
@@ -18,14 +19,47 @@
 ;; a closure is not in "source" programs; it is what functions evaluate to
 (struct closure (env fun) #:transparent) 
 
+(struct num-array  (size) #:transparent)  ;; a number array  (initialized to zeroes), e.g., (num-array-var 10)
+                                                     ;; e.g. (num-array 4)
+
+(struct num-array-at   (e1 e2) #:transparent) ;; e1 evaluates to num-array and e2 evaluates to racket int (index of the value to access) index starts from 0
+                                              ;; (num-array-at (num-array 4) 3)
+                                              ;; (num-array-at (num-array 4) 4) ;  this should give a nice error messaeg (like "array access out of bound")
+                                              ;; (num-array-at (num-array 4) -1) ;  this should give a nice error messaeg (like "array access out of bound")
+
+(struct num-array-set  (e1 e2 e3) #:transparent) ;; e1 evaluates to num-array-var, e2 evaluates to racket int (index of the value to access), and e3 evaluates to a MUPL int
+                                              ;; (num-array-set (num-array 4) 0 (int 42))
+                                              ;; (num-array-set (num-array 4) 5 (int 42)) ; this should give a nice error messaeg (like "array access out of bound")
+                                              ;; (num-array-set (num-array 4) -1 (int 42)) ; this should give a nice error messaeg (like "array access out of bound")
+
+(define (num-array-object? v) ;; hackish implementation of testing num-array object. We assume that if a value is mpair, it is a num-array object.
+  (mpair? v))
+
+(define (array-length array)
+  (if (eq? (mcdr array) null)
+      1
+      (+ 1 (array-length (mcdr array)))))
+
+(define (make-array-object length)  
+    (if (= length 0)
+        null
+        (mcons (int 0) (make-array-object (- length 1)))))
+
+(define (set-array-val array index val)
+  (if (= index 0)
+      (set-mcar! array val)
+      (set-array-val (mcdr array) (- index 1) val)))
+
 (define (make-array length)
     (if (= length 0)
         null
         (mcons (int 0) (make-array (- length 1)))))
-(define (set-array-val array index val)
-  (if (= index 0)
-      (set-mcar! array val)
-      (mcar array)))
+
+;(define (set-array-val array index val)
+;  (if (= index 0)
+;      (set-mcar! array val)
+;      (mcar array)))
+
 ;; Problem 1
 
 ;; CHANGE (put your solutions here)
@@ -49,6 +83,11 @@
 
 ;; lookup a variable in an environment
 ;; Do NOT change this function
+(define (genvlookup genv str)
+  (cond [(null? genv) #f]
+        [(equal? (car (car genv)) str) (cdr (car genv))]
+        [#t (genvlookup (cdr genv) str)]))
+
 (define (envlookup env str)
   (cond [(null? env) (error "unbound variable during evaluation" str)]
         [(equal? (car (car env)) str) (cdr (car env))]
@@ -58,6 +97,77 @@
 ;; DO add more cases for other kinds of MUPL expressions.
 ;; We will test eval-under-env by calling it directly even though
 ;; "in real life" it would be a helper function of eval-exp.
+
+(define (eval-under-env-genv e env genv)
+  (cond [(var? e)
+         (let ([v (genvlookup genv (var-string e))])
+             (if v
+                 v
+                 (envlookup env (var-string e))))]
+        [(add? e) 
+         (let ([v1 (eval-under-env-genv (add-e1 e) env genv)]
+               [v2 (eval-under-env-genv (add-e2 e) env genv)])
+           (if (and (int? v1)
+                    (int? v2))
+               (int (+ (int-num v1) 
+                       (int-num v2)))
+               (error "MUPL addition applied to non-number")))]
+        ;; CHANGE add more cases here
+        [(int? e) e]
+        [(aunit? e) e]
+        [(closure? e) e]
+        [(fun? e) (closure env e)]
+        [(ifgreater? e)
+         (let ([v1 (eval-under-env-genv (ifgreater-e1 e) env genv)]
+               [v2 (eval-under-env-genv (ifgreater-e2 e) env genv)])
+           (if (and (int? v1)(int? v2))
+               (if (> (int-num v1) (int-num v2))
+                   (eval-under-env-genv (ifgreater-e3 e) env genv)
+                   (eval-under-env-genv (ifgreater-e4 e) env genv))
+               (error "MUPL ifgreater applied to non-number")))]
+        [(mlet? e)
+         (letrec ([v (eval-under-env-genv (mlet-e e) env genv)]
+                  [env-with-let-binding (cons (cons (mlet-var e) v) env)])
+           (eval-under-env (mlet-body e) env-with-let-binding))]
+        [(glet? e)
+         (letrec ([v (eval-under-env-genv (glet-e e) env genv)]
+                  [env-with-let-binding (cons (cons (glet-var e) v) env)]
+                  [genv-with-let-binding (cons (cons (glet-var e) v) genv)])
+           (eval-under-env-genv (glet-body e) env-with-let-binding genv-with-let-binding))]
+        [(call? e)
+         (let ([v1 (eval-under-env-genv (call-funexp e) env genv)]
+               [v2 (eval-under-env-genv (call-actual e) env genv)])
+           (if (closure? v1)
+               (let* ([cfun (closure-fun v1)]
+                      [cenv (closure-env v1)]
+                      [newenv (cons (cons (fun-formal cfun) v2) cenv)]
+                      [fmap (cons (fun-nameopt cfun) v1)]
+                      [fbody (fun-body cfun)])
+                 (if (fun-nameopt cfun)
+                     (eval-under-env-genv fbody (cons fmap newenv) genv)
+                     (eval-under-env-genv fbody newenv genv)))
+               (error "MUPL call applied to non-closure")))]
+        [(apair? e)
+         (let ([v1 (eval-under-env-genv (apair-e1 e) env genv)]
+               [v2 (eval-under-env-genv (apair-e2 e) env genv)])
+           (apair v1 v2))]
+        [(fst? e)
+         (let ([v (eval-under-env-genv (fst-e e) env genv)])
+           (if (apair? v)
+               (apair-e1 v)
+               (error "MUPL fst applied to non-apair")))]
+        [(snd? e)
+         (let ([v (eval-under-env-genv (snd-e e) env genv)])
+           (if (apair? v)
+               (apair-e2 v)
+               (error "MUPL snd applied to non-apair")))]
+        [(isaunit? e)
+         (let ([v (eval-under-env-genv (isaunit-e e) env genv)])
+           (if (aunit? v)
+               (int 1)
+               (int 0)))]
+        [#t (error (format "bad MUPL expression: ~v" e))]))
+
 (define (eval-under-env e env)
   (cond [(var? e) 
          (envlookup env (var-string e))]
@@ -84,8 +194,13 @@
                (error "MUPL ifgreater applied to non-number")))]
         [(mlet? e)
          (letrec ([v (eval-under-env (mlet-e e) env)]
-                  [letenv (cons (cons (mlet-var e) v) env)])
-           (eval-under-env (mlet-body e) letenv))]
+                  [env-with-let-binding (cons (cons (mlet-var e) v) env)])
+           (eval-under-env (mlet-body e) env-with-let-binding))]
+        [(glet? e)
+         (letrec ([v (eval-under-env (glet-e e) env)]
+                  [env-with-let-binding (cons (cons (glet-var e) v) env)]
+                  [genv (cons (cons (glet-var e) v) null)])
+           (eval-under-env-genv (glet-body e) env-with-let-binding genv))]
         [(call? e)
          (let ([v1 (eval-under-env (call-funexp e) env)]
                [v2 (eval-under-env (call-actual e) env)])
@@ -138,6 +253,25 @@
 ; (eval-exp (snd (int 7))) -> error case
 ; (eval-exp (ifgreater (aunit) (int 42) (int 1) (int 2))) -> error case
 ; (eval-exp (call (apair (int 1) (aunit)) (int 1))) -> error case
+
+(equal? (eval-exp (mlet "x" (int 42)
+                        (mlet "fun_a"
+                              (fun "funname" "arg1"
+                                   (add (var "x") (var "arg1")))
+                              (glet "x" (int 10)
+                                    (call (var "fun_a") (int 1)))))) (int 11))
+(equal? (eval-exp (glet "x" (int 42)
+                        (mlet "fun_a"
+                              (fun "funname" "arg1"
+                                   (add (var "x") (var "arg1")))
+                              (glet "x" (int 10)
+                                    (call (var "fun_a") (int 1)))))) (int 11))
+(equal? (eval-exp (mlet "x" (int 42)
+                        (mlet "fun_a"
+                              (fun "funname" "arg1"
+                                   (add (var "x") (var "arg1")))
+                              (mlet "x" (int 10)
+                                    (call (var "fun_a") (int 1)))))) (int 43))
 
 ;; Problem 3
 
