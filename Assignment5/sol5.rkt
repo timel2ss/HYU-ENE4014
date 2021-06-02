@@ -74,12 +74,19 @@
       (cons (apair-e1 mlist) (mupllist->racketlist (apair-e2 mlist)))))
 
 ;; Test Codes
+#|
 (equal? (racketlist->mupllist '()) (aunit))
 (equal? (racketlist->mupllist '(1 2 3)) (apair 1 (apair 2 (apair 3 (aunit)))))
 (equal? (mupllist->racketlist (aunit)) '())
 (equal? (mupllist->racketlist (apair -5 (apair -4 (apair -3 (aunit))))) '(-5 -4 -3))
+|#
 
 ;; Problem 2
+
+(define (access array index)
+  (if (= index 0)
+      (mcar array)
+      (access (mcdr array) (- index 1))))
 
 ;; lookup a variable in an environment
 ;; Do NOT change this function
@@ -166,6 +173,28 @@
            (if (aunit? v)
                (int 1)
                (int 0)))]
+        [(num-array? e)
+         (if (>= (num-array-size e) 0)
+             (make-array-object (num-array-size e))
+             (error "MUPL num-array size is negative"))]
+        [(num-array-at? e)
+         (let ([array (eval-under-env-genv (num-array-at-e1 e) env genv)]
+               [index (num-array-at-e2 e)])
+           (cond [(not (num-array-object? array)) (error "MUPL num-array-at applied to non-num-array")]
+                 [(null? array) (error "MUPL num-array-at access out of bound")]
+                 [(< index 0) (error "MUPL num-array-at access out of bound")]
+                 [(>= index (array-length array)) (error "MUPL num-array-at access out of bound")]
+                 [#t (access array index)]))]
+        [(num-array-set? e)
+         (let ([array (eval-under-env-genv (num-array-set-e1 e) env genv)]
+               [index (num-array-set-e2 e)]
+               [v (eval-under-env-genv (num-array-set-e3 e) env)])
+           (cond [(not (num-array-object? array)) (error "MUPL num-array-set applied to non-num-array")]
+                 [(null? array) (error "MUPL num-array-set access out of bound")]
+                 [(< index 0) (error "MUPL num-array-set access out of bound")]
+                 [(>= index (array-length array)) (error "MUPL num-array-set access out of bound")]
+                 [(not (int? v)) (error "MUPL num-array-set applied to non-integer value")]
+                 [#t (begin (set-array-val array index v) v)]))]
         [#t (error (format "bad MUPL expression: ~v" e))]))
 
 (define (eval-under-env e env)
@@ -233,6 +262,28 @@
            (if (aunit? v)
                (int 1)
                (int 0)))]
+        [(num-array? e)
+         (if (>= (num-array-size e) 0)
+             (make-array-object (num-array-size e))
+             (error "MUPL num-array size is negative"))]
+        [(num-array-at? e)
+         (let ([array (eval-under-env (num-array-at-e1 e) env)]
+               [index (num-array-at-e2 e)])
+           (cond [(not (num-array-object? array)) (error "MUPL num-array-at applied to non-num-array")]
+                 [(null? array) (error "MUPL num-array-at access out of bound")]
+                 [(< index 0) (error "MUPL num-array-at access out of bound")]
+                 [(>= index (array-length array)) (error "MUPL num-array-at access out of bound")]
+                 [#t (access array index)]))]
+        [(num-array-set? e)
+         (let ([array (eval-under-env (num-array-set-e1 e) env)]
+               [index (num-array-set-e2 e)]
+               [v (eval-under-env (num-array-set-e3 e) env)])
+           (cond [(not (num-array-object? array)) (error "MUPL num-array-set applied to non-num-array")]
+                 [(null? array) (error "MUPL num-array-set access out of bound")]
+                 [(< index 0) (error "MUPL num-array-set access out of bound")]
+                 [(>= index (array-length array)) (error "MUPL num-array-set access out of bound")]
+                 [(not (int? v)) (error "MUPL num-array-set applied to non-integer value")]
+                 [#t (begin (set-array-val array index v) v)]))]
         [#t (error (format "bad MUPL expression: ~v" e))]))
 
 ;; Do NOT change
@@ -240,6 +291,7 @@
   (eval-under-env e null))
 
 ;; Test Codes
+#|
 (equal? (eval-exp (ifgreater (int 3) (add (int 1) (int 1)) (aunit) (int 42))) (aunit))
 (equal? (eval-exp (ifgreater (add (int 1) (int 1)) (int 3) (aunit) (int 42))) (int 42))
 (equal? (eval-exp (call (fun "fun" "x" (add (int 1) (var "x"))) (int 3))) (int 4))
@@ -273,6 +325,18 @@
                               (mlet "x" (int 10)
                                     (call (var "fun_a") (int 1)))))) (int 43))
 
+(equal? (eval-exp (mlet "array" (num-array 10)
+                        (num-array-at (var "array") 9))) (int 0))
+
+(equal? (eval-exp (mlet "array" (num-array 10)
+                        (mlet "set" (num-array-set (var "array") 9 (int 42))
+                              (num-array-at (var "array") 9)))) (int 42))
+(equal? (eval-exp (mlet "array" (num-array 10)
+                        (mlet "set" (num-array-set (var "array") 9 (int 42))
+                              (glet "array" (num-array 10)
+                                    (num-array-at (var "array") 9))))) (int 0))
+|#
+
 ;; Problem 3
 
 (define (ifaunit e1 e2 e3) (ifgreater (isaunit e1) (int 0) e2 e3))
@@ -288,11 +352,13 @@
                     (ifgreater (var "_y") (var "_x") e4 e3))))
 
 ;; Test Codes
+#|
 (equal? (eval-exp (ifaunit (aunit) (int 42) (int 34))) (int 42))
 (equal? (eval-exp (ifaunit (int 1) (int 42) (int 34))) (int 34))
 (equal? (eval-exp (mlet* (list (cons "a" (int 1)) (cons "b" (int 2))) (add (var "a") (var "b")))) (int 3))
 (equal? (eval-exp (ifeq (int 1) (int 1) (int 3) (int 4))) (int 3))
 (equal? (eval-exp (ifeq (int 1) (int 2) 3 (int 4))) (int 4))
+|#
 
 ;; Problem 4
 
@@ -310,5 +376,7 @@
              (call (var "map") (fun #f "x" (add (var "x") (var "I")))))))
 
 ;; Test Codes
+#|
 (equal? (eval-exp (call (call mupl-map (fun "fun" "x" (add (var "x") (int 1)))) (apair (int 1) (apair (int 2) (apair (int 3) (aunit)))))) (apair (int 2) (apair (int 3) (apair (int 4) (aunit)))))
 (equal? (eval-exp (call (call mupl-mapAddN (int 3)) (apair (int 1) (apair (int 2) (apair (int 3) (aunit)))))) (apair (int 4) (apair (int 5) (apair (int 6) (aunit)))))
+|#
